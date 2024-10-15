@@ -24,11 +24,13 @@ BATCH_SIZE = 100
 
 # Google credentials
 GOOGLE_CREDS_JSON = "google_creds_json"
+
 # Google sheet ID
 SHEET_ID = ...
 
 # Google sheets workbook name
 WORKBOOK_NAME = ...
+
 
 def get_input_files(input_file_path):
     # Convert file path to Path object
@@ -101,63 +103,89 @@ def load_json(file):
         return json.load(file)
 
 
+def find_category(transaction_description, categories):
+    """
+    Check if any keywords from categories match the transaction description.
+    Returns the assigned category or None if no match is found.
+    """
+    for category, keywords in categories.items():
+        if any(keyword.lower() in transaction_description.lower() for keyword in keywords):
+            return category
+    return None
+
+
+def prompt_user_for_category(categories, account_name, transaction_date, transaction_value, transaction_description):
+    """
+    Prompt the user to select a category if no category was found for the transaction.
+    Returns the assigned category chosen by the user.
+    """
+    print(f"\nThe following transaction could not be categorised: \n")
+    table = [
+        ["Account:", account_name],
+        ["Date:", transaction_date],
+        ["Amount:", transaction_value],
+        ["Description:", transaction_description]
+    ]
+    print(tabulate(table))
+    print("\nSelect the category you would like to assign it to:\n")
+
+    # Display category options
+    for index, category in enumerate(categories, start=1):
+        print(f"{index}: {category}")
+
+    while True:
+        try:
+            assigned = int(input("\nEnter category id: "))
+            if 1 <= assigned <= len(categories):
+                assigned_category = list(categories.keys())[assigned - 1]
+                print(f"\nTransaction '{transaction_description}' assigned to category: {assigned_category}")
+                return assigned_category
+            else:
+                print("\nInvalid input. Please enter a valid category ID.\n")
+        except ValueError:
+            print("\nInvalid input. Please enter a number corresponding to a category ID.")
+
+
+def add_transaction_to_category(transaction_description, assigned_category, categories):
+    """
+    Ask the user if they want to add the transaction description to the selected category.
+    Updates the categories if the user agrees.
+    """
+    while True:
+        decision = input("Would you like to add this transaction to the categories for future use? (Y/N): ").strip().upper()
+        if decision == "Y":
+            if transaction_description not in categories[assigned_category]:
+                categories[assigned_category].append(transaction_description)
+                print(f"\nTransaction '{transaction_description}' added to the '{assigned_category}' category.")
+            else:
+                print(f"\nTransaction '{transaction_description}' is already in the '{assigned_category}' category.")
+            break
+        elif decision == "N":
+            print(f"\nTransaction '{transaction_description}' not added to any category.")
+            break
+        else:
+            print("\nInvalid input. Please enter 'Y' or 'N'.")
+
+
+def save_categories(categories, filename):
+    """
+    Save the updated categories to a JSON file.
+    """
+    save_updated_category_keywords_to_json_file(categories, filename)
+
+
 def categorise_transaction(transaction_description, account_name, transaction_date, transaction_value):
     categories = load_json(CATEGORIES_JSON)
 
-    # Iterate through each category and its associated list of keywords
-    for category, keywords in categories.items():
-        # Check if any keyword matches the transaction string snd return category if match
-        if any(keyword.lower() in transaction_description.lower() for keyword in keywords):
-            return category
-        # If not, prompt the user to enter a category
-        else:
-            table = [["Account:", account_name], ["Date:", transaction_date], [
-                "Amount:", transaction_value], ["Description:", transaction_description]]
-            print(f"\nThe following transaction could not be categorised: \n")
-            # Print the transaction
-            print(tabulate(table))
-            print("\nSelect the category you would like to assign it to:\n")
-            # Display category options
-            for index, category in enumerate(categories, start=1):
-                print(f"{index}: {category}")
+    # Find the assigned category based on transaction description
+    assigned_category = find_category(transaction_description, categories)
 
-                while True:
-                    # Prompt the user to input a category ID
-                    assigned = int(input("\nEnter category id: "))
+    if not assigned_category:
+        assigned_category = prompt_user_for_category(categories, account_name, transaction_date, transaction_value, transaction_description)
+        add_transaction_to_category(transaction_description, assigned_category, categories)
 
-                    # Validate the input and check if it matches a category
-                    if 1 <= assigned <= len(categories):
-                        category = list(categories.keys())[assigned - 1]
-                        print(
-                            f"\nTransaction '{transaction_description}' assigned to category: {category}")
-
-                        while True:
-                            decision = input(
-                                "Would you like to add this to categories for future use? (Y/N): ").upper()
-
-                            if decision == "Y":
-                                # Add the transaction as a keyword under the selected category
-                                if transaction_description not in categories[category]:
-                                    categories[category].append(
-                                        transaction_description)
-                                    print(
-                                        f"\nTransaction '{transaction_description}' added to the '{category}' category.")
-                                else:
-                                    print(
-                                        f"\nTransaction '{transaction_description}' is already in the '{category}' category.")
-                                break
-                            elif decision == "N":
-                                print(
-                                    f"\nTransaction '{transaction_description}' not added to any category.")
-                                break
-                            else:
-                                print(
-                                    "\nInvalid input. Please enter 'Y' or 'N'.")
-                    else:
-                        print(
-                            "\nInvalid input. Please enter a valid category ID.\n")
-        save_updated_category_keywords_to_json_file(categories, CATEGORIES_JSON)
-        return category
+    save_categories(categories, CATEGORIES_JSON)
+    return assigned_category
 
 
 def save_updated_category_keywords_to_json_file(categories, categories_file):
@@ -191,15 +219,16 @@ def parse_transactions(input_files):
             reader = csv.DictReader(infile)
 
             # Iterate over account rows
-            for row in infile:
+            for row in reader:
                 # Get the transaction date
                 transaction_date = get_transaction_date(row)
 
                 # Get the transaction value
-                transaction_value = get_transaction_value()
+                transaction_value = get_transaction_value(row)
 
                 # Get the transaction description
-                transaction_description = get_transaction_description()
+                transaction_description = get_transaction_description(
+                    row, account_name)
 
                 # Categorise the transaction
                 transaction_category = categorise_transaction(
@@ -210,8 +239,12 @@ def parse_transactions(input_files):
                     transaction_category, transaction_value)
 
                 # Return a transaction dictionary and append to the list of transactions
-                transaction = {"date": transaction_date, "value": transaction_value, "description": transaction_description,
-                               "category": transaction_category, "type": transaction_type, "account": account_name}
+                transaction = [transaction_date,
+                               transaction_value,
+                               transaction_description,
+                               transaction_category,
+                               transaction_type,
+                               account_name]
 
                 transactions.append(transaction)
     transactions.sort(key=lambda x: x['date'])
@@ -219,8 +252,8 @@ def parse_transactions(input_files):
 
 
 def connect_to_google_sheets():
-
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+
     creds = Credentials.from_service_account_file(
         GOOGLE_CREDS_JSON, scopes=scopes)
     client = gspread.authorize(creds)
@@ -230,18 +263,16 @@ def connect_to_google_sheets():
     return workbook.worksheet(WORKBOOK_NAME)
 
 
-def upload_to_google_sheet(transactions):
+def upload_to_google_sheet(transactions, google_connection):
     print("\nOpening spreadsheet...\n")
 
-    # Format list of lists for Google Sheets
-    rows = [[transaction] for transaction in transactions]
-
     # Split transactions into batches
-    for i in range(0, len(rows), BATCH_SIZE):
-        batch = rows[i:i + BATCH_SIZE]
+    for i in range(0, len(transactions), BATCH_SIZE):
+        batch = transactions[i:i + BATCH_SIZE]
         try:
             # Append the current batch to the sheet
-            sheet.append_rows(batch, value_input_option='USER_ENTERED')
+            google_connection.append_rows(
+                batch, value_input_option='USER_ENTERED')
         except APIError as e:
             if 'Quota exceeded' in str(e):
                 print("API quota exceeded, stopping the update.")
@@ -262,4 +293,6 @@ def main():
     # Parse transactions
     transactions = parse_transactions(input_files)
 
-    upload_to_google_sheet(transactions)
+    # Connect to Google
+    google_connection = connect_to_google_sheets()
+    upload_to_google_sheet(transactions, google_connection)
