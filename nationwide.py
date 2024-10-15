@@ -11,25 +11,28 @@ from google.oauth2.service_account import Credentials
 
 
 # Name of folder containing input CSVs
-INPUT_FILE_PATH = "inputs"
+INPUT_FILE_PATH = ""
 
 # Location of the Nationwide Account name on the first line pf the CSV statements
 ACCOUNT_NAME_LOCATION = 1
 
+# Location of date in list of lists for sorting
+DATE_LOCATION = 0
+
 # Category file
-CATEGORIES_JSON = "categories.json"
+CATEGORIES_JSON = ""
 
 # Google upload batch size
 BATCH_SIZE = 100
 
 # Google credentials
-GOOGLE_CREDS_JSON = "google_creds_json"
+GOOGLE_CREDS_JSON = ""
 
 # Google sheet ID
-SHEET_ID = ...
+SHEET_ID =
 
 # Google sheets workbook name
-WORKBOOK_NAME = ...
+WORKBOOK_NAME = ""
 
 
 def get_input_files(input_file_path):
@@ -247,7 +250,7 @@ def parse_transactions(input_files):
                                account_name]
 
                 transactions.append(transaction)
-    transactions.sort(key=lambda x: x['date'])
+    transactions.sort(key=lambda x: x[DATE_LOCATION])
     return transactions
 
 
@@ -296,3 +299,6 @@ def main():
     # Connect to Google
     google_connection = connect_to_google_sheets()
     upload_to_google_sheet(transactions, google_connection)
+
+if __name__ == "__main__":
+    main()
