@@ -102,7 +102,7 @@ def load_json(file):
 
 
 def categorise_transaction(transaction_description, account_name, transaction_date, transaction_value):
-    categories = load__json(CATEGORIES_JSON)
+    categories = load_json(CATEGORIES_JSON)
 
     # Iterate through each category and its associated list of keywords
     for category, keywords in categories.items():
@@ -156,7 +156,7 @@ def categorise_transaction(transaction_description, account_name, transaction_da
                     else:
                         print(
                             "\nInvalid input. Please enter a valid category ID.\n")
-        save_updated_category_keywords_to_json_file(categories, CATEGORIES)
+        save_updated_category_keywords_to_json_file(categories, CATEGORIES_JSON)
         return category
 
 
@@ -219,14 +219,15 @@ def parse_transactions(input_files):
 
 
 def connect_to_google_sheets():
+
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(
-        "google_credentials.json", scopes=scopes)
+        GOOGLE_CREDS_JSON, scopes=scopes)
     client = gspread.authorize(creds)
 
     sheet_id = SHEET_ID
     workbook = client.open_by_key(sheet_id)
-    sheet = workbook.worksheet(WORKBOOK_NAME)
+    return workbook.worksheet(WORKBOOK_NAME)
 
 
 def upload_to_google_sheet(transactions):
