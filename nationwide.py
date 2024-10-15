@@ -107,41 +107,40 @@ def categorise_transaction(transaction_description, account_name, transaction_da
                 print(f"{index}: {category}")
 
                 while True:
-                    try:
-                        # Prompt the user to input a category ID
-                        assigned = int(input("\nEnter category id: "))
+                    # Prompt the user to input a category ID
+                    assigned = int(input("\nEnter category id: "))
 
-                        # Validate the input and check if it matches a category
-                        if 1 <= assigned <= len(categories):
-                            category = list(categories.keys())[assigned - 1]
-                            print(
-                                f"\nTransaction '{transaction_description}' assigned to category: {category}")
+                    # Validate the input and check if it matches a category
+                    if 1 <= assigned <= len(categories):
+                        category = list(categories.keys())[assigned - 1]
+                        print(
+                            f"\nTransaction '{transaction_description}' assigned to category: {category}")
 
-                            while True:
-                                decision = input(
-                                    "Would you like to add this to categories for future use? (Y/N): ").upper()
+                        while True:
+                            decision = input(
+                                "Would you like to add this to categories for future use? (Y/N): ").upper()
 
-                                if decision == "Y":
-                                    # Add the transaction as a keyword under the selected category
-                                    if transaction_description not in categories[category]:
-                                        categories[category].append(
-                                            transaction_description)
-                                        print(
-                                            f"\nTransaction '{transaction_description}' added to the '{category}' category.")
-                                    else:
-                                        print(
-                                            f"\nTransaction '{transaction_description}' is already in the '{category}' category.")
-                                    break
-                                elif decision == "N":
+                            if decision == "Y":
+                                # Add the transaction as a keyword under the selected category
+                                if transaction_description not in categories[category]:
+                                    categories[category].append(
+                                        transaction_description)
                                     print(
-                                        f"\nTransaction '{transaction_description}' not added to any category.")
-                                    break
+                                        f"\nTransaction '{transaction_description}' added to the '{category}' category.")
                                 else:
                                     print(
-                                        "\nInvalid input. Please enter 'Y' or 'N'.")
-                        else:
-                            print(
-                                "\nInvalid input. Please enter a valid category ID.\n")
+                                        f"\nTransaction '{transaction_description}' is already in the '{category}' category.")
+                                break
+                            elif decision == "N":
+                                print(
+                                    f"\nTransaction '{transaction_description}' not added to any category.")
+                                break
+                            else:
+                                print(
+                                    "\nInvalid input. Please enter 'Y' or 'N'.")
+                    else:
+                        print(
+                            "\nInvalid input. Please enter a valid category ID.\n")
         save_updated_category_keywords_to_json_file(categories, CATEGORIES)
         return category
 
@@ -153,13 +152,12 @@ def save_updated_category_keywords_to_json_file(categories, categories_file):
 
 
 def get_transaction_type():
-    transaction_description, account_name, transaction_date, transaction_value
+    
 
 
-def main():
-    # Get files from the user
-    input_files = get_input_files(INPUT_FILE_PATH)
-    # Create empty list of transactions 
+def parse_transactions(input_files):
+    # Create empty list of transactions
+    transactions = []
     # Iterate over files
     for input in input_files:
         with open(input, "r", encoding=get_encoding(input)) as infile:
@@ -188,7 +186,20 @@ def main():
                     transaction_description, account_name, transaction_date, transaction_value)
 
                 # Give the transaction a type
-                transaction_type = get_transaction_type(transaction_category)
+                transaction_type = get_transaction_type(
+                    transaction_category)
 
                 # Return a transaction dictionary and append to the list of transactions
+                transaction = {"date": transaction_date, "value": transaction_value, "description": transaction_description,
+                               "category": transaction_category, "type": transaction_type, "account": account_name}
 
+                transactions.append(transaction)
+    return transactions
+
+
+def main():
+    # Get files from the user
+    input_files = get_input_files(INPUT_FILE_PATH)
+
+    # Parse transactions
+    parse_transactions(input_files)
