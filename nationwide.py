@@ -4,6 +4,11 @@ import json
 from dateutil import parser
 from pathlib import Path
 from tabulate import tabulate
+import time
+from gspread.exceptions import APIError
+import gspread
+from google.oauth2.service_account import Credentials
+
 
 # Name of folder containing input CSVs
 INPUT_FILE_PATH = "inputs"
@@ -12,8 +17,18 @@ INPUT_FILE_PATH = "inputs"
 ACCOUNT_NAME_LOCATION = 1
 
 # Category file
-CATEGORIES = "categories.json"
+CATEGORIES_JSON = "categories.json"
 
+# Google upload batch size
+BATCH_SIZE = 100
+
+# Google credentials
+GOOGLE_CREDS_JSON = "google_creds_json"
+# Google sheet ID
+SHEET_ID = ...
+
+# Google sheets workbook name
+WORKBOOK_NAME = ...
 
 def get_input_files(input_file_path):
     # Convert file path to Path object
@@ -81,13 +96,13 @@ def get_transaction_description(row, account_name):
     return row.get("Transactions") if account_name == "Nationwide Credit" else row.get("Description")
 
 
-def load_categories_json(file):
+def load_json(file):
     with open(file, 'r') as file:
         return json.load(file)
 
 
 def categorise_transaction(transaction_description, account_name, transaction_date, transaction_value):
-    categories = load_categories_json(CATEGORIES)
+    categories = load__json(CATEGORIES_JSON)
 
     # Iterate through each category and its associated list of keywords
     for category, keywords in categories.items():
@@ -154,7 +169,7 @@ def save_updated_category_keywords_to_json_file(categories, categories_file):
 def get_transaction_type(transaction_category, transaction_value):
     if transaction_category == "Transfer":
         return "Transfer"
-    elif transaction_amount > 0:
+    elif transaction_value > 0:
         return "Income"
     else:
         return "Expense"
@@ -199,7 +214,44 @@ def parse_transactions(input_files):
                                "category": transaction_category, "type": transaction_type, "account": account_name}
 
                 transactions.append(transaction)
+    transactions.sort(key=lambda x: x['date'])
     return transactions
+
+
+def connect_to_google_sheets():
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file(
+        "google_credentials.json", scopes=scopes)
+    client = gspread.authorize(creds)
+
+    sheet_id = SHEET_ID
+    workbook = client.open_by_key(sheet_id)
+    sheet = workbook.worksheet(WORKBOOK_NAME)
+
+
+def upload_to_google_sheet(transactions):
+    print("\nOpening spreadsheet...\n")
+
+    # Format list of lists for Google Sheets
+    rows = [[transaction] for transaction in transactions]
+
+    # Split transactions into batches
+    for i in range(0, len(rows), BATCH_SIZE):
+        batch = rows[i:i + BATCH_SIZE]
+        try:
+            # Append the current batch to the sheet
+            sheet.append_rows(batch, value_input_option='USER_ENTERED')
+        except APIError as e:
+            if 'Quota exceeded' in str(e):
+                print("API quota exceeded, stopping the update.")
+                break
+            else:
+                print(f"API error occurred: {e}")
+                break
+
+        time.sleep(2)
+
+    print("Upload completed.")
 
 
 def main():
@@ -207,4 +259,6 @@ def main():
     input_files = get_input_files(INPUT_FILE_PATH)
 
     # Parse transactions
-    parse_transactions(input_files)
+    transactions = parse_transactions(input_files)
+
+    upload_to_google_sheet(transactions)
