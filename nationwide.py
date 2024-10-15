@@ -151,8 +151,13 @@ def save_updated_category_keywords_to_json_file(categories, categories_file):
         json.dump(categories, file, indent=4)
 
 
-def get_transaction_type():
-    
+def get_transaction_type(transaction_category, transaction_value):
+    if transaction_category == "Transfer":
+        return "Transfer"
+    elif transaction_amount > 0:
+        return "Income"
+    else:
+        return "Expense"
 
 
 def parse_transactions(input_files):
@@ -187,7 +192,7 @@ def parse_transactions(input_files):
 
                 # Give the transaction a type
                 transaction_type = get_transaction_type(
-                    transaction_category)
+                    transaction_category, transaction_value)
 
                 # Return a transaction dictionary and append to the list of transactions
                 transaction = {"date": transaction_date, "value": transaction_value, "description": transaction_description,
