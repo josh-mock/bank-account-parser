@@ -1,8 +1,9 @@
 google_creds.json
+categories.json
+
 
 inputs/
 
-categories.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
