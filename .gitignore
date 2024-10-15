@@ -2,6 +2,8 @@ google_creds.json
 
 inputs/
 
+categories.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
