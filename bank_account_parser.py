@@ -93,7 +93,7 @@ def get_nationwide_transaction_value(row):
 
 
 def get_nationwide_transaction_description(row, account_name):
-    return row.get("Transactions") if account_name == "Nationwide Credit" else row.get("Description")
+    return row.get("Transactions") if account_name == "Nationwide Credit Card" else row.get("Description")
 
 
 def load_json(file):
