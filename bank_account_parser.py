@@ -10,23 +10,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 import glob
-
-
-# Category file
-CATEGORIES_JSON = "categories.json"
-
-# Google upload batch size
-BATCH_SIZE = 100
-
-# Google credentials
-GOOGLE_CREDS_JSON = "google_creds.json"
-
-# Google sheet ID
-SHEET_ID = ""
-
-# Google sheets workbook name
-WORKBOOK_NAME = ""
-
+from constants import CATEGORIES_JSON, GOOGLE_CREDS_JSON, SHEET_ID, WORKBOOK_NAME, BATCH_SIZE, BANKS
 
 def get_input_files(input_file_path):
     # Convert file path to Path object
@@ -209,133 +193,60 @@ def get_transaction_type(transaction_category, transaction_value):
         return "Expense"
 
 
-def parse_nationwide_transactions(input_files):
+def parse_transactions(input_file, bank):
     # Create empty list of transactions
     transactions = []
-    # Iterate over files
-    for input_file in input_files:
-        with open(input_file, "r", encoding=get_encoding(input_file)) as infile:
+    with open(input_file, "r", encoding=get_encoding(input_file)) as infile:
+        # Set up account-specific logic
+        if bank == "Nationwide":
             reader = csv.reader(infile)
-            # Parse the first row to get account name
             first_row = next(reader)
             account_name = get_nationwide_account_name(first_row)
-
-            # Find the headings
             find_headings(infile)
-
-            # Iterate over account rows
             reader = csv.DictReader(infile)
-
-            for row in reader:
-                # Get the transaction date
-                transaction_date = get_transaction_date(row)
-
-                # Get the transaction value
-                transaction_value = get_nationwide_transaction_value(row)
-
-                # Get the transaction description
-                transaction_description = get_nationwide_transaction_description(
-                    row, account_name)
-
-                # Categorise the transaction
-                transaction_category = categorise_transaction(
-                    transaction_description, account_name, transaction_date, transaction_value)
-
-                # Give the transaction a type
-                transaction_type = get_transaction_type(
-                    transaction_category, transaction_value)
-
-                # Return a transaction dictionary and append to the list of transactions
-                transaction = [transaction_date,
-                               transaction_value,
-                               transaction_description,
-                               transaction_category,
-                               transaction_type,
-                               account_name]
-
-                transactions.append(transaction)
-    return transactions
-
-
-def parse_amex_transactions(input_files):
-    # Create empty list of transactions
-    transactions = []
-    # Iterate over files
-    for input_file in input_files:
-        with open(input_file, "r", encoding=get_encoding(input_file)) as infile:
+        elif bank == "Amex":
             reader = csv.DictReader(infile)
             account_name = "Amex"
-
-            reader = csv.DictReader(infile)
-
-            # Iterate over account rows
-            for row in reader:
-                # Get the transaction date
-                transaction_date = get_transaction_date(row)
-
-                # Get the absolute transaction value
-                transaction_value = -1 * float(row.get("Amount"))
-
-                # Get the transaction description
-                transaction_description = row.get("Description")
-
-                # Categorise the transaction
-                transaction_category = categorise_transaction(
-                    transaction_description, account_name, transaction_date, transaction_value)
-
-                # Give the transaction a type
-                transaction_type = get_transaction_type(
-                    transaction_category, transaction_value)
-
-                # Return a transaction dictionary and append to the list of transactions
-                transaction = [transaction_date,
-                               transaction_value,
-                               transaction_description,
-                               transaction_category,
-                               transaction_type,
-                               account_name]
-
-                transactions.append(transaction)
-    return transactions
-
-
-def parse_starling_transactions(input_files):
-    # Create empty list of transactions
-    transactions = []
-    # Iterate over files
-    for input_file in input_files:
-        with open(input_file, "r", encoding=get_encoding(input_file)) as infile:
+        elif bank == "Starling":
             reader = csv.DictReader(infile)
             account_name = "Starling"
+        else:
+            raise ValueError("Unsupported account type")
 
-            # Iterate over account rows
-            for row in reader:
-                # Get the transaction date
-                transaction_date = get_transaction_date(row)
+        # Iterate over account rows
+        for row in reader:
+            # Get transaction date
+            transaction_date = get_transaction_date(row)
 
-                # Get the transaction value
+            # Handle transaction value based on account type
+            if bank == "Nationwide":
+                transaction_value = get_nationwide_transaction_value(row)
+                transaction_description = get_nationwide_transaction_description(
+                    row, account_name)
+            elif bank == "Amex":
+                transaction_value = -1 * float(row.get("Amount"))
+                transaction_description = row.get("Description")
+            elif bank == "Starling":
                 transaction_value = row.get("Amount (GBP)")
-
-                # Get the transaction description
                 transaction_description = row.get("Reference")
 
-                # Categorise the transaction
-                transaction_category = categorise_transaction(
-                    transaction_description, account_name, transaction_date, transaction_value)
+            # Categorize the transaction
+            transaction_category = categorise_transaction(
+                transaction_description, account_name, transaction_date, transaction_value)
 
-                # Give the transaction a type
-                transaction_type = get_transaction_type(
-                    transaction_category, transaction_value)
+            # Assign a transaction type
+            transaction_type = get_transaction_type(
+                transaction_category, transaction_value)
 
-                # Return a transaction dictionary and append to the list of transactions
-                transaction = [transaction_date,
-                               transaction_value,
-                               transaction_description,
-                               transaction_category,
-                               transaction_type,
-                               account_name]
+            # Create a transaction dictionary and add to the list
+            transaction = [transaction_date,
+                           transaction_value,
+                           transaction_description,
+                           transaction_category,
+                           transaction_type,
+                           account_name]
 
-                transactions.append(transaction)
+            transactions.append(transaction)
     return transactions
 
 
@@ -374,11 +285,15 @@ def upload_to_google_sheet(transactions, google_connection):
     print("Upload completed.")
 
 
-def process_transactions(input_folder, parse_function):
+def process_transactions(input_folder, bank):
     input_files = get_input_files(input_folder)
     if input_files:
-        return parse_function(input_files)
+        transactions = []
+        for input_file in input_files:
+            transactions.extend(parse_transactions(input_file, bank))
+        return transactions
     return []
+
 
 
 def delete_csv_files(directory):
@@ -395,23 +310,12 @@ def delete_csv_files(directory):
 
 
 def main():
-    accounts = {
-        "nationwide": {
-            "input_folder": "inputs/nationwide",
-            "parser": parse_nationwide_transactions},
-        "starling": {
-            "input_folder": "inputs/starling",
-            "parser": parse_starling_transactions},
-        "amex": {"input_folder": "inputs/amex",
-                 "parser": parse_amex_transactions}
-    }
     # Initialise empty transactions list
     parsed_transactions = []
 
     # Process transactions for each bank
-    for _, account in accounts.items():
-        bank_transactions = process_transactions(
-            account["input_folder"], account["parser"])
+    for bank, input_folder in BANKS.items():
+        bank_transactions = process_transactions(input_folder, bank)
         parsed_transactions.extend(bank_transactions)
 
     # Sort transactions by date
@@ -423,8 +327,8 @@ def main():
     # Ensure connection was successful
     if google_connection:
         upload_to_google_sheet(parsed_transactions, google_connection)
-        for _, account in accounts.items():
-            delete_csv_files(account["input_folder"])
+        for _, input_file in BANKS.items():
+            delete_csv_files(input_file)
     else:
         print("Failed to connect to Google Sheets.")
 

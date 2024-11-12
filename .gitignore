@@ -1,7 +1,6 @@
 google_creds.json
 categories.json
-
-
+.DS_Store
 inputs/
 
 
