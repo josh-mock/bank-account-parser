@@ -12,6 +12,7 @@ import os
 import glob
 from constants import CATEGORIES_JSON, GOOGLE_CREDS_JSON, SHEET_ID, WORKBOOK_NAME, BATCH_SIZE, BANKS
 
+
 def get_input_files(input_file_path):
     # Convert file path to Path object
     directory = Path(input_file_path)
@@ -42,11 +43,6 @@ def get_encoding(file_path):
         return result['encoding']
 
 
-def get_nationwide_account_name(first_row):
-    raw_string = first_row[1]
-    return raw_string.split('****')[0].strip()
-
-
 def find_headings(infile):
     for _ in range(3):
         next(infile)
@@ -68,16 +64,10 @@ def get_nationwide_transaction_value(row):
     paid_out = row.get("Paid out")
 
     if paid_in:
-        # Remove the currency symbol and return
         return float(paid_in[1:])
 
     if paid_out:
-        # Remove the currency symbol and make negative
         return -float(paid_out[1:])
-
-
-def get_nationwide_transaction_description(row, account_name):
-    return row.get("Transactions") if account_name == "Nationwide Credit Card" else row.get("Description")
 
 
 def load_json(file):
@@ -155,13 +145,6 @@ def add_transaction_to_category(transaction_description, assigned_category, cate
             print("\nInvalid input. Please enter 'Y' or 'N'.")
 
 
-def save_categories(categories, filename):
-    """
-    Save the updated categories to a JSON file.
-    """
-    save_updated_category_keywords_to_json_file(categories, filename)
-
-
 def categorise_transaction(transaction_description, account_name, transaction_date, transaction_value):
     categories = load_json(CATEGORIES_JSON)
 
@@ -174,7 +157,7 @@ def categorise_transaction(transaction_description, account_name, transaction_da
         add_transaction_to_category(
             transaction_description, assigned_category, categories)
 
-    save_categories(categories, CATEGORIES_JSON)
+    save_updated_category_keywords_to_json_file(categories, CATEGORIES_JSON)
     return assigned_category
 
 
@@ -201,7 +184,7 @@ def parse_transactions(input_file, bank):
         if bank == "Nationwide":
             reader = csv.reader(infile)
             first_row = next(reader)
-            account_name = get_nationwide_account_name(first_row)
+            account_name = first_row[1].split('****')[0].strip()
             find_headings(infile)
             reader = csv.DictReader(infile)
         elif bank == "Amex":
@@ -221,8 +204,8 @@ def parse_transactions(input_file, bank):
             # Handle transaction value based on account type
             if bank == "Nationwide":
                 transaction_value = get_nationwide_transaction_value(row)
-                transaction_description = get_nationwide_transaction_description(
-                    row, account_name)
+                transaction_description = row.get(
+                    "Transactions") if account_name == "Nationwide Credit Card" else row.get("Description")
             elif bank == "Amex":
                 transaction_value = -1 * float(row.get("Amount"))
                 transaction_description = row.get("Description")
@@ -293,7 +276,6 @@ def process_transactions(input_folder, bank):
             transactions.extend(parse_transactions(input_file, bank))
         return transactions
     return []
-
 
 
 def delete_csv_files(directory):
