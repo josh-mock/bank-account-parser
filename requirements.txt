@@ -1,5 +1,0 @@
-chardet
-python-dateutil
-gspread
-tabulate
-google-auth
